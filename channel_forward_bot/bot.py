@@ -1,5 +1,4 @@
-import os
-import json
+import os, json
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from dotenv import load_dotenv
@@ -9,162 +8,238 @@ load_dotenv()
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-BOT_NAME = "Forward Ai Bot"
 
 app = Client("forward_ai_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
-# Utility Functions
-def load_json(file):
-    with open(file, "r") as f:
+DATA_FOLDER = "user_data"
+if not os.path.exists(DATA_FOLDER):
+    os.makedirs(DATA_FOLDER)
+
+TEMP_SELECTION = {}
+
+def get_user_file(user_id):
+    return os.path.join(DATA_FOLDER, f"{user_id}.json")
+
+def get_user_data(user_id):
+    path = get_user_file(user_id)
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
         return json.load(f)
 
-def save_json(file, data):
-    with open(file, "w") as f:
-        json.dump(data, f, indent=4)
+def save_user_data(user_id, data):
+    path = get_user_file(user_id)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
 
-config = load_json("config.json")
-filters_data = load_json("filters.json")
+def is_logged_in(user_id):
+    return os.path.exists(get_user_file(user_id))
 
-# Startup Message
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply(f"""**Welcome to {BOT_NAME}!**
+    await message.reply("**Welcome to Forward Ai Bot!**\nUse /login to begin. Use /help for full command list.")
 
-This bot auto-forwards messages from a source channel to a destination channel.
-
-Use /help to see all commands.
-""")
-
-# Help Command
 @app.on_message(filters.command("help"))
 async def help_command(client, message):
-    await message.reply("""**Bot Commands:**
+    await message.reply("""**Commands:**
+/login - Register yourself
+/setsource - Select joined channel/group as source
+/setdestination - Select destination channel
+/addfilter old new - Replace words
+/delfilter word - Remove word filter
+/addfilefilter old.ext new.ext - Rename files
+/delfilefilter old.ext - Remove file rename rule
+/startforward - Start auto-forward
+/stopforward - Stop auto-forward
+/status - Show setup""")
 
-/login - Activate bot (only for authorized user)
-/setsource <invite_link> - Join and set source channel
-/setdestination - Set current channel as destination
-/addfilter old new - Replace word before forwarding
-/delfilter word - Delete word filter
-/addfilefilter old.ext new.ext - Rename file before forward
-/delfilefilter old.ext - Delete file rename rule
-/status - View current setup & filters
-""")
-
-# Login Command
 @app.on_message(filters.command("login"))
 async def login(client, message):
-    if message.from_user.id in config["authorized_users"]:
-        await message.reply("Login successful. You are authorized.")
-    else:
-        await message.reply("Unauthorized access.")
+    user_id = message.from_user.id
+    if is_logged_in(user_id):
+        return await message.reply("Already logged in.")
+    data = {
+        "source": None,
+        "destination": None,
+        "filters": {},
+        "filefilters": {},
+        "forward": False
+    }
+    save_user_data(user_id, data)
+    await message.reply("Login successful! Now use /setsource and /setdestination")
 
-# Set Source Channel
+async def list_user_chats(client, user_id):
+    dialogs = []
+    async for dialog in client.iter_dialogs():
+        if dialog.chat.type in ["channel", "supergroup", "group"]:
+            dialogs.append((dialog.chat.id, dialog.chat.title))
+    TEMP_SELECTION[user_id] = dialogs
+    return dialogs
+
 @app.on_message(filters.command("setsource"))
 async def set_source(client, message):
-    if message.from_user.id not in config["authorized_users"]:
-        return await message.reply("Unauthorized.")
-    try:
-        link = message.text.split(" ", 1)[1]
-        chat = await app.join_chat(link)
-        config["source_channel"] = chat.id
-        save_json("config.json", config)
-        await message.reply(f"Source channel set to: {chat.title}")
-    except Exception as e:
-        await message.reply(f"Error: {e}")
+    user_id = message.from_user.id
+    if not is_logged_in(user_id):
+        return await message.reply("Use /login first.")
+    
+    dialogs = await list_user_chats(client, user_id)
+    if not dialogs:
+        return await message.reply("No joined channels or groups found.")
+    
+    msg = "**Select a source channel/group:**\n"
+    for i, (_, title) in enumerate(dialogs, 1):
+        msg += f"{i}. {title}\n"
+    msg += "\nReply with the number."
+    
+    await message.reply(msg)
+    TEMP_SELECTION[f"{user_id}_mode"] = "source"
 
-# Set Destination Channel
 @app.on_message(filters.command("setdestination"))
 async def set_destination(client, message):
-    if message.from_user.id not in config["authorized_users"]:
-        return await message.reply("Unauthorized.")
-    config["destination_channel"] = message.chat.id
-    save_json("config.json", config)
-    await message.reply(f"Destination channel set to: {message.chat.title}")
+    user_id = message.from_user.id
+    if not is_logged_in(user_id):
+        return await message.reply("Use /login first.")
 
-# Status
-@app.on_message(filters.command("status"))
-async def status(client, message):
-    if message.from_user.id not in config["authorized_users"]:
-        return await message.reply("Unauthorized.")
-    src = config["source_channel"]
-    dst = config["destination_channel"]
-    word_filters = filters_data["words"]
-    file_filters = filters_data["files"]
-    await message.reply(f"""**Current Bot Status:**
+    dialogs = await list_user_chats(client, user_id)
+    if not dialogs:
+        return await message.reply("No joined channels or groups found.")
+    
+    msg = "**Select a destination channel/group:**\n"
+    for i, (_, title) in enumerate(dialogs, 1):
+        msg += f"{i}. {title}\n"
+    msg += "\nReply with the number."
 
-Source Channel ID: `{src}`
-Destination Channel ID: `{dst}`
-Word Filters: {word_filters}
-File Filters: {file_filters}
-""")
+    await message.reply(msg)
+    TEMP_SELECTION[f"{user_id}_mode"] = "destination"
 
-# Add Word Filter
+@app.on_message(filters.text & filters.private)
+async def handle_selection(client, message):
+    user_id = message.from_user.id
+    if f"{user_id}_mode" not in TEMP_SELECTION:
+        return
+    
+    if not message.text.isdigit():
+        return await message.reply("Please send a number from the list.")
+    
+    index = int(message.text) - 1
+    mode = TEMP_SELECTION.pop(f"{user_id}_mode")
+    chats = TEMP_SELECTION.pop(user_id, [])
+    
+    if index < 0 or index >= len(chats):
+        return await message.reply("Invalid number.")
+    
+    chat_id, chat_title = chats[index]
+    data = get_user_data(user_id)
+    
+    if mode == "source":
+        data["source"] = chat_id
+        await message.reply(f"Source set: {chat_title}")
+    else:
+        data["destination"] = chat_id
+        await message.reply(f"Destination set: {chat_title}")
+    
+    save_user_data(user_id, data)
+
 @app.on_message(filters.command("addfilter"))
 async def add_filter(client, message):
-    if message.from_user.id not in config["authorized_users"]:
-        return
+    user_id = message.from_user.id
+    if not is_logged_in(user_id): return
     try:
         old, new = message.text.split(" ", 2)[1:]
-        filters_data["words"][old] = new
-        save_json("filters.json", filters_data)
-        await message.reply(f"Added filter: {old} → {new}")
+        data = get_user_data(user_id)
+        data["filters"][old] = new
+        save_user_data(user_id, data)
+        await message.reply(f"Filter added: {old} → {new}")
     except:
         await message.reply("Usage: /addfilter old new")
 
-# Delete Word Filter
 @app.on_message(filters.command("delfilter"))
 async def del_filter(client, message):
-    if message.from_user.id not in config["authorized_users"]:
-        return
+    user_id = message.from_user.id
     word = message.text.split(" ", 1)[1]
-    if word in filters_data["words"]:
-        del filters_data["words"][word]
-        save_json("filters.json", filters_data)
-        await message.reply(f"Deleted word filter: {word}")
+    data = get_user_data(user_id)
+    if word in data["filters"]:
+        del data["filters"][word]
+        save_user_data(user_id, data)
+        await message.reply("Filter removed.")
     else:
-        await message.reply("Filter not found.")
+        await message.reply("Not found.")
 
-# Add File Rename Filter
 @app.on_message(filters.command("addfilefilter"))
 async def add_file_filter(client, message):
-    if message.from_user.id not in config["authorized_users"]:
-        return
+    user_id = message.from_user.id
     try:
         old, new = message.text.split(" ", 2)[1:]
-        filters_data["files"][old] = new
-        save_json("filters.json", filters_data)
-        await message.reply(f"File rename rule added: {old} → {new}")
+        data = get_user_data(user_id)
+        data["filefilters"][old] = new
+        save_user_data(user_id, data)
+        await message.reply(f"File rule: {old} → {new}")
     except:
         await message.reply("Usage: /addfilefilter old.ext new.ext")
 
-# Delete File Rename Filter
 @app.on_message(filters.command("delfilefilter"))
 async def del_file_filter(client, message):
-    if message.from_user.id not in config["authorized_users"]:
-        return
-    name = message.text.split(" ", 1)[1]
-    if name in filters_data["files"]:
-        del filters_data["files"][name]
-        save_json("filters.json", filters_data)
-        await message.reply(f"Deleted file rename rule: {name}")
+    user_id = message.from_user.id
+    word = message.text.split(" ", 1)[1]
+    data = get_user_data(user_id)
+    if word in data["filefilters"]:
+        del data["filefilters"][word]
+        save_user_data(user_id, data)
+        await message.reply("File rule removed.")
     else:
-        await message.reply("File rule not found.")
+        await message.reply("Not found.")
 
-# Auto Forward with Filters
-@app.on_message(filters.chat(lambda _, __, msg: msg.chat.id == config.get("source_channel")))
-async def forward(client, message: Message):
-    dst = config.get("destination_channel")
-    if not dst:
-        return
-    text = message.text or message.caption or ""
-    for old, new in filters_data["words"].items():
-        text = text.replace(old, new)
+@app.on_message(filters.command("startforward"))
+async def start_forward(client, message):
+    user_id = message.from_user.id
+    data = get_user_data(user_id)
+    data["forward"] = True
+    save_user_data(user_id, data)
+    await message.reply("Forwarding started.")
 
-    if message.text:
-        await client.send_message(dst, text)
-    elif message.document:
-        name = message.document.file_name
-        new_name = filters_data["files"].get(name, name)
-        await client.send_document(dst, message.document.file_id, caption=text, file_name=new_name)
+@app.on_message(filters.command("stopforward"))
+async def stop_forward(client, message):
+    user_id = message.from_user.id
+    data = get_user_data(user_id)
+    data["forward"] = False
+    save_user_data(user_id, data)
+    await message.reply("Forwarding stopped.")
+
+@app.on_message(filters.command("status"))
+async def status(client, message):
+    user_id = message.from_user.id
+    data = get_user_data(user_id)
+    await message.reply(f"""**Your Setup:**
+Source: `{data['source']}`
+Destination: `{data['destination']}`
+Forwarding: {"✅ On" if data['forward'] else "❌ Off"}
+Word Filters: {data['filters']}
+File Filters: {data['filefilters']}
+""")
+
+@app.on_message(filters.all)
+async def forward_messages(client, message: Message):
+    for user_file in os.listdir(DATA_FOLDER):
+        user_id = int(user_file.split(".")[0])
+        data = get_user_data(user_id)
+        if not data["forward"] or message.chat.id != data["source"]:
+            continue
+
+        text = message.text or message.caption or ""
+        for old, new in data["filters"].items():
+            text = text.replace(old, new)
+
+        if message.text:
+            await client.send_message(data["destination"], text)
+        elif message.document:
+            fname = message.document.file_name
+            newname = data["filefilters"].get(fname, fname)
+            await client.send_document(
+                data["destination"],
+                document=message.document.file_id,
+                caption=text,
+                file_name=newname
+            )
 
 app.run()
+        
