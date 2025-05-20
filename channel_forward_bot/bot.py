@@ -41,24 +41,29 @@ def save_user_config(user_id, config):
 async def start_handler(client, message):
     await message.reply_text(
         "**Welcome to Forward Ai Bot**\n\n"
-        "Commands:\n"
-        "/login - Start login with your Telegram account\n"
+        "Here are the commands you can use:\n"
+        "/login - Login to your Telegram account\n"
         "/setsource - Set source channel or group\n"
-        "/setdestination - Set destination channel\n"
-        "/addfilter old|new - Replace words\n"
-        "/removefilter old - Remove filter\n"
+        "/setdestination - Set destination channel or group\n"
+        "/addfilter old|new - Add word replacement\n"
+        "/removefilter old - Remove a word filter\n"
         "/startforward - Start auto forwarding\n"
-        "/stopforward - Stop auto forwarding"
+        "/stopforward - Stop auto forwarding\n"
+        "/help - Show this help message"
     )
+
+@app.on_message(filters.command("help"))
+async def help_handler(client, message):
+    await start_handler(client, message)
 
 @app.on_message(filters.command("login"))
 async def login_handler(client, message):
     user_id = message.from_user.id
     if user_id in sessions:
-        await message.reply("Already logged in.")
+        await message.reply("You're already logged in.")
         return
 
-    await message.reply("Please enter your phone number with country code (e.g. +91XXXXXXXXXX):")
+    await message.reply("Enter your phone number with country code (e.g. +91XXXXXXXXXX):")
 
     def phone_filter(_, m: Message):
         return m.from_user.id == user_id
@@ -116,7 +121,7 @@ async def set_source(client, message):
     await message.reply(f"Source set to: {dialogs[index].chat.title}")
 
 @app.on_message(filters.command("setdestination"))
-async def set_dest(client, message):
+async def set_destination(client, message):
     user_id = message.from_user.id
     if user_id not in sessions:
         await message.reply("Please /login first.")
@@ -200,19 +205,14 @@ async def auto_forward_loop():
                             pass
         await asyncio.sleep(10)
 
-@app.on_message(filters.command("help"))
-async def help_cmd(client, message):
-    await start_handler(client, message)
-
-@app.on_message()
-async def ignore_all(client, message):
-    pass
+from pyrogram import idle
 
 async def main():
     await app.start()
     asyncio.create_task(auto_forward_loop())
-    print("Bot started.")
+    print("Forward Ai Bot started.")
     await idle()
+    await app.stop()
 
-from pyrogram.idle import idle
-app.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
