@@ -30,7 +30,15 @@ filters_dict = load_filters()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id == ADMIN_ID:
-        await update.message.reply("Bot is running. Use /addfilter and /delfilter commands to manage filters.")
+        message = (
+            "Bot is running.\n\n"
+            "Commands available:\n"
+            "/addfilter word:replacement - Set a word filter\n"
+            "/delfilter word - Remove a word filter\n"
+            "/listfilters - View all filters\n"
+            "/filter - Get filter example"
+        )
+        await update.message.reply(message)
     else:
         await update.message.reply("You're not authorized to use this bot.")
 
@@ -59,15 +67,25 @@ async def del_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if len(context.args) == 1:
-        word = context.args[0]
-        if word in filters_dict:
-            del filters_dict[word]
-            save_filters(filters_dict)
-            await update.message.reply(f"Filter removed: {word}")
-        else:
-            await update.message.reply(f"No filter found for: {word}")
+        try:
+            filter_number = int(context.args[0]) - 1  # Indexing starts from 0
+            filter_keys = list(filters_dict.keys())
+            if 0 <= filter_number < len(filter_keys):
+                word = filter_keys[filter_number]
+                del filters_dict[word]
+                save_filters(filters_dict)
+                await update.message.reply(f"Filter removed: {word}")
+            else:
+                await update.message.reply("Invalid filter number.")
+        except ValueError:
+            await update.message.reply("Usage: /delfilter number")
     else:
-        await update.message.reply("Usage: /delfilter word")
+        # Show available filters
+        if filters_dict:
+            filters_list = "\n".join([f"{i+1}. {word} → {replacement}" for i, (word, replacement) in enumerate(filters_dict.items())])
+            await update.message.reply(f"Filters:\n{filters_list}")
+        else:
+            await update.message.reply("No filters set.")
 
 # /listfilters command
 async def list_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -81,6 +99,21 @@ async def list_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply(f"Current filters:\n{filters_list}")
     else:
         await update.message.reply("No filters set.")
+
+# /filter command (show example)
+async def filter_example(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply("You are not authorized.")
+        return
+
+    example_message = (
+        "Example usage:\n\n"
+        "/addfilter word:replacement\n"
+        "For example: /addfilter Hi:Hello\n"
+        "This will replace 'Hi' with 'Hello' in forwarded messages."
+    )
+    await update.message.reply(example_message)
 
 # === Message Forwarding with Replacements ===
 async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -130,8 +163,9 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("addfilter", add_filter))
     app.add_handler(CommandHandler("delfilter", del_filter))
     app.add_handler(CommandHandler("listfilters", list_filters))
+    app.add_handler(CommandHandler("filter", filter_example))
     app.add_handler(MessageHandler(filters.ALL, forward_message))
 
     print("Bot is running...")
     app.run_polling()
-      
+                
