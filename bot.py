@@ -31,8 +31,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id == ADMIN_ID:
         message = (
-            "Bot is running.\n\n"
-            "Commands available:\n"
+            "Welcome! Bot is running.\n\n"
+            "Available Commands:\n"
+            "/start - Welcome message\n"
             "/addfilter word:replacement - Set a word filter\n"
             "/delfilter word - Remove a word filter\n"
             "/listfilters - View all filters\n"
@@ -86,19 +87,6 @@ async def del_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply(f"Filters:\n{filters_list}")
         else:
             await update.message.reply("No filters set.")
-
-# /listfilters command
-async def list_filters(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id != ADMIN_ID:
-        await update.message.reply("You are not authorized.")
-        return
-
-    if filters_dict:
-        filters_list = "\n".join([f"{word} → {replacement}" for word, replacement in filters_dict.items()])
-        await update.message.reply(f"Current filters:\n{filters_list}")
-    else:
-        await update.message.reply("No filters set.")
 
 # /filter command (show example)
 async def filter_example(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -162,10 +150,8 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("addfilter", add_filter))
     app.add_handler(CommandHandler("delfilter", del_filter))
-    app.add_handler(CommandHandler("listfilters", list_filters))
     app.add_handler(CommandHandler("filter", filter_example))
     app.add_handler(MessageHandler(filters.ALL, forward_message))
 
-    print("Bot is running...")
+    print("laudaaa...")
     app.run_polling()
-                
