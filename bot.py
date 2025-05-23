@@ -165,43 +165,39 @@ async def handle_admin_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.message.reply_text("Please send a valid number.")
         return
 
-# === Message Forward Handler ===
-async def handle_forwarded_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.forward_from_chat:
-        chat: Chat = update.message.forward_from_chat
-        cid = chat.id
-        title = chat.title or str(cid)
-
-        if cid not in source_channels and cid not in dest_channels:
-            await update.message.reply_text(
-                "Reply with 'source' or 'dest' to add this channel as source or destination."
-            )
-            context.chat_data['pending_add'] = cid
-            context.chat_data['pending_title'] = title
-
-    elif update.message.text.lower() in ["source", "dest"]:
-        cid = context.chat_data.get('pending_add')
-        title = context.chat_data.get('pending_title')
-
-        if not cid:
-            await update.message.reply_text("No channel pending for addition.")
-            return
-
-        if update.message.text.lower() == "source":
+async def add_source(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    if context.args:
+        try:
+            cid = int(context.args[0])
+            chat = await context.bot.get_chat(cid)
             if cid not in source_channels:
                 source_channels.append(cid)
-                channel_names[str(cid)] = title
+                channel_names[str(cid)] = chat.title or str(cid)
                 save_channels(source_channels, dest_channels, channel_names)
-                await update.message.reply_text(f"Added source channel: {title}")
-        else:
+                await update.message.reply_text(f"Added source channel: {chat.title}")
+            else:
+                await update.message.reply_text("Already exists.")
+        except Exception as e:
+            await update.message.reply_text(f"Error: {e}\nMake sure the bot is admin in that private channel.")
+
+async def add_dest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    if context.args:
+        try:
+            cid = int(context.args[0])
+            chat = await context.bot.get_chat(cid)
             if cid not in dest_channels:
                 dest_channels.append(cid)
-                channel_names[str(cid)] = title
+                channel_names[str(cid)] = chat.title or str(cid)
                 save_channels(source_channels, dest_channels, channel_names)
-                await update.message.reply_text(f"Added destination channel: {title}")
-
-        context.chat_data.pop('pending_add', None)
-        context.chat_data.pop('pending_title', None)
+                await update.message.reply_text(f"Added destination channel: {chat.title}")
+            else:
+                await update.message.reply_text("Already exists.")
+        except Exception as e:
+            await update.message.reply_text(f"Error: {e}\nMake sure the bot is admin in that private channel.")
 
 # === Forward Channel Messages ===
 async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
