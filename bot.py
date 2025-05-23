@@ -1,4 +1,3 @@
-
 import os
 import json
 from telegram import Update
@@ -7,7 +6,6 @@ from dotenv import load_dotenv
 
 # === Load Configuration ===
 load_dotenv()
-
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID'))
 
@@ -52,7 +50,7 @@ awaiting_delete_dest = {}
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
-        message = (
+    message = (
         "Welcome!\n\n"
         "Commands:\n"
         "/start - Show this help\n"
@@ -62,7 +60,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/adddest <channel_id> - Add destination channel\n"
         "/delsource - Delete source channel\n"
         "/deldest - Delete destination channel"
-        )
+    )
     await update.message.reply_text(message)
 
 async def filter_example(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -71,10 +69,11 @@ async def filter_example(update: Update, context: ContextTypes.DEFAULT_TYPE):
     awaiting_filter_input[update.effective_user.id] = True
     await update.message.reply_text("Send filter like this: Hi==Hello")
 
-async def handle_filter_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    text = update.message.text
+
     if awaiting_filter_input.get(user_id):
-        text = update.message.text
         if '==' in text:
             word, replacement = text.split('==', 1)
             filters_dict[word.strip()] = replacement.strip()
@@ -83,27 +82,11 @@ async def handle_filter_input(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text(f"Filter set: {word.strip()} → {replacement.strip()}")
         else:
             await update.message.reply_text("Invalid format. Use: Hi==Hello")
-
-async def del_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id != ADMIN_ID:
         return
 
-    if not filters_dict:
-        await update.message.reply_text("No filters set.")
-        return
-
-        keys = list(filters_dict.keys())
-    awaiting_delete_input[user_id] = keys
-    msg = "Filters:\n" + "\n".join([f"{i+1}. {k} → {filters_dict[k]}" for i, k in enumerate(keys)])
-    msg += "\nSend the number of the filter to delete."
-    await update.message.reply_text(msg)
-
-async def handle_delete_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
     if user_id in awaiting_delete_input:
         try:
-            index = int(update.message.text) - 1
+            index = int(text) - 1
             keys = awaiting_delete_input[user_id]
             if 0 <= index < len(keys):
                 removed = keys[index]
@@ -119,7 +102,7 @@ async def handle_delete_input(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if user_id in awaiting_delete_source:
         try:
-            index = int(update.message.text) - 1
+            index = int(text) - 1
             ids = awaiting_delete_source[user_id]
             if 0 <= index < len(ids):
                 cid = ids[index]
@@ -136,7 +119,7 @@ async def handle_delete_input(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if user_id in awaiting_delete_dest:
         try:
-            index = int(update.message.text) - 1
+            index = int(text) - 1
             ids = awaiting_delete_dest[user_id]
             if 0 <= index < len(ids):
                 cid = ids[index]
@@ -149,6 +132,20 @@ async def handle_delete_input(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await update.message.reply_text("Invalid number.")
         except:
             await update.message.reply_text("Please send a valid number.")
+
+async def del_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if user_id != ADMIN_ID:
+        return
+    if not filters_dict:
+        await update.message.reply_text("No filters set.")
+        return
+
+    keys = list(filters_dict.keys())
+    awaiting_delete_input[user_id] = keys
+    msg = "Filters:\n" + "\n".join([f"{i+1}. {k} → {filters_dict[k]}" for i, k in enumerate(keys)])
+    msg += "\nSend the number of the filter to delete."
+    await update.message.reply_text(msg)
 
 async def add_source(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -190,11 +187,10 @@ async def del_source(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No source channels to delete.")
         return
     awaiting_delete_source[user_id] = source_channels[:]
-    msg = "Source Channels:
-" + "
-".join([f"{i+1}. {channel_names.get(str(cid), str(cid))}" for i, cid in enumerate(source_channels)])
-    msg += "
-Send the number to delete."
+    msg = "Source Channels:\n" + "\n".join(
+        [f"{i+1}. {channel_names.get(str(cid), str(cid))}" for i, cid in enumerate(source_channels)]
+    )
+    msg += "\nSend the number to delete."
     await update.message.reply_text(msg)
 
 async def del_dest(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -203,11 +199,10 @@ async def del_dest(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No destination channels to delete.")
         return
     awaiting_delete_dest[user_id] = dest_channels[:]
-    msg = "Destination Channels:
-" + "
-".join([f"{i+1}. {channel_names.get(str(cid), str(cid))}" for i, cid in enumerate(dest_channels)])
-    msg += "
-Send the number to delete."
+    msg = "Destination Channels:\n" + "\n".join(
+        [f"{i+1}. {channel_names.get(str(cid), str(cid))}" for i, cid in enumerate(dest_channels)]
+    )
+    msg += "\nSend the number to delete."
     await update.message.reply_text(msg)
 
 async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -244,8 +239,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("adddest", add_dest))
     app.add_handler(CommandHandler("delsource", del_source))
     app.add_handler(CommandHandler("deldest", del_dest))
-    app.add_handler(MessageHandler(filters.TEXT & filters.User(ADMIN_ID), handle_filter_input))
-    app.add_handler(MessageHandler(filters.TEXT & filters.User(ADMIN_ID), handle_delete_input))
+    app.add_handler(MessageHandler(filters.TEXT & filters.User(ADMIN_ID), handle_admin_text))
     app.add_handler(MessageHandler(filters.ALL, forward_message))
 
     print("Bot running...")
