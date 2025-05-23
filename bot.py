@@ -52,26 +52,17 @@ awaiting_delete_dest = {}
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
-    message = (
-        "Welcome!
-
-"
-        "Commands:
-"
-        "/start - Show this help
-"
-        "/filter - Add a filter (e.g., Hi==Hello)
-"
-        "/delfilter - Delete a filter
-"
-        "/addsource <channel_id> - Add source channel
-"
-        "/adddest <channel_id> - Add destination channel
-"
-        "/delsource - Delete source channel
-"
+        message = (
+        "Welcome!\n\n"
+        "Commands:\n"
+        "/start - Show this help\n"
+        "/filter - Add a filter (e.g., Hi==Hello)\n"
+        "/delfilter - Delete a filter\n"
+        "/addsource <channel_id> - Add source channel\n"
+        "/adddest <channel_id> - Add destination channel\n"
+        "/delsource - Delete source channel\n"
         "/deldest - Delete destination channel"
-    )
+        )
     await update.message.reply_text(message)
 
 async def filter_example(update: Update, context: ContextTypes.DEFAULT_TYPE):
