@@ -93,13 +93,10 @@ async def del_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No filters set.")
         return
 
-    keys = list(filters_dict.keys())
+        keys = list(filters_dict.keys())
     awaiting_delete_input[user_id] = keys
-    msg = "Filters:
-" + "
-".join([f"{i+1}. {k} → {filters_dict[k]}" for i, k in enumerate(keys)])
-    msg += "
-Send the number of the filter to delete."
+    msg = "Filters:\n" + "\n".join([f"{i+1}. {k} → {filters_dict[k]}" for i, k in enumerate(keys)])
+    msg += "\nSend the number of the filter to delete."
     await update.message.reply_text(msg)
 
 async def handle_delete_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
